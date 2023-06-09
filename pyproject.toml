@@ -1,6 +1,6 @@
 [tool.ruff]
 line-length = 120
-exclude = ["migrations", ".venv", "helm", "./utils", "tests", ".pytest_cache", ".ruff_cache", ".git", ".github"]
+exclude = [".venv", ".pytest_cache", ".ruff_cache", ".git", ".github"]
 select = ["ALL"]
 ignore = [
     "A002",
@@ -52,6 +52,7 @@ classmethod-decorators = ["classmethod", "pydantic.validator"]
     "ANN201",
     "ANN202",
     "ANN201",
+    "INP001",
 ]
 "conftest.py" = [
     "S101",
@@ -61,6 +62,7 @@ classmethod-decorators = ["classmethod", "pydantic.validator"]
     "ANN201",
     "ANN202",
     "ANN201",
+    "INP001",
 ]
 
 [tool.ruff.isort]
