@@ -5,6 +5,10 @@ PYTHONPATH := ./
 TEST_DIR := tests/
 LINT_DIR := ./
 
+
+format:
+	ruff check ${LINT_DIR} --fix
+
 lint:
 	ruff check ${LINT_DIR}
 

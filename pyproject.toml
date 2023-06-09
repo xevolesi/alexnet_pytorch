@@ -1,0 +1,71 @@
+[tool.ruff]
+line-length = 120
+exclude = ["migrations", ".venv", "helm", "./utils", "tests", ".pytest_cache", ".ruff_cache", ".git", ".github"]
+select = ["ALL"]
+ignore = [
+    "A002",
+    "A003",
+    "ANN001",
+    "ANN002",
+    "ANN003",
+    "ANN101",
+    "ANN102",
+    "ARG001",
+    "ARG002",
+    "COM812",
+    "DTZ007",
+    "E501",
+    "N806",
+    "PLR2004",
+    "RUF100",
+    "S101",
+    "S308",
+    "TCH003",
+    "TCH002",
+    "EXE002",
+
+    # We agreed to have more freedom in writing docstrings.
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D107",
+
+    # They won't allow you to use boolean positional arguments.
+    "FBT001",
+    "FBT002",
+]
+src = ["source"]
+
+[tool.ruff.pep8-naming]
+classmethod-decorators = ["classmethod", "pydantic.validator"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["E402"]
+"test_*.py" = [
+    "S101",
+    "ANN201",
+    "ARG001",
+    "ANN001",
+    "ANN201",
+    "ANN202",
+    "ANN201",
+]
+"conftest.py" = [
+    "S101",
+    "ANN201",
+    "ARG001",
+    "ANN001",
+    "ANN201",
+    "ANN202",
+    "ANN201",
+]
+
+[tool.ruff.isort]
+combine-as-imports = true
+force-sort-within-sections = true
+
+[tool.ruff.pylint]
+max-args = 7
