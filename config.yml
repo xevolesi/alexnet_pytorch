@@ -1,0 +1,61 @@
+path:
+  dataset:
+    root_dir: /home/xevolesi/Datasets/ImageNet
+    meta_file_path: /home/xevolesi/Datasets/ImageNet/meta.json
+
+
+training:
+  image_size: 224
+
+augmentations:
+  train:
+    transform:
+      __class_fullname__: Compose
+      transforms:
+        - __class_fullname__: albumentations.augmentations.crops.transforms.RandomResizedCrop
+          height: 224
+          width: 224
+        - __class_fullname__: albumentations.augmentations.geometric.transforms.HorizontalFlip
+        - __class_fullname__: albumentations.augmentations.transforms.FancyPCA
+
+        # To PyTorch tensors.
+        - __class_fullname__: albumentations.augmentations.transforms.Normalize
+          always_apply: true
+          max_pixel_value: 255.0
+          mean:
+            - 0.485
+            - 0.456
+            - 0.406
+          std:
+            - 0.229
+            - 0.224
+            - 0.225
+        - __class_fullname__: albumentations.pytorch.transforms.ToTensorV2
+          always_apply: true
+  val:
+    transform:
+      __class_fullname__: Compose
+      transforms:
+        - __class_fullname__: albumentations.augmentations.geometric.resize.Resize
+          height: 256
+          width: 256
+          always_apply: true
+        - __class_fullname__: albumentations.augmentations.crops.transforms.CenterCrop
+          height: 224
+          width: 224
+          always_apply: true
+
+        # To PyTorch tensors.
+        - __class_fullname__: albumentations.augmentations.transforms.Normalize
+          always_apply: true
+          max_pixel_value: 255.0
+          mean:
+            - 0.485
+            - 0.456
+            - 0.406
+          std:
+            - 0.229
+            - 0.224
+            - 0.225
+        - __class_fullname__: albumentations.pytorch.transforms.ToTensorV2
+          always_apply: true
