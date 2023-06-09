@@ -6,4 +6,6 @@ _CONFIG_PATH = "config.yml"
 
 @pytest.fixture(scope="session")
 def get_test_config():
-    return read_config(_CONFIG_PATH)
+    config = read_config(_CONFIG_PATH)
+    config.training.batch_size = 4
+    return config

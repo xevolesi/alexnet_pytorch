@@ -3,6 +3,9 @@ path:
     root_dir: /home/xevolesi/Datasets/ImageNet
     meta_file_path: /home/xevolesi/Datasets/ImageNet/meta.json
 
+model:
+  n_classes: 1000
+  in_channels: 3
 
 training:
   image_size: 224
