@@ -34,6 +34,9 @@ jobs:
     - name: Lint with Ruff
       run: |
         ruff check .
+    - name: Check typehinting with mypy
+      run: |
+          mypy -p source
     - name: Test with pytest
       run: |
         pytest -svvv tests

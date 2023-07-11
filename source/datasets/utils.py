@@ -7,6 +7,7 @@ from source.utils.general import reseed
 
 
 class DatasetMode(str, Enum):
+    __slots__ = ()
     TRAIN = "train"
     VAL = "val"
     TEST = "test"
@@ -18,5 +19,5 @@ def fix_worker_seeds(worker_id: int) -> None:
     reseed(seed)
 
 
-def read_image(image_path: str) -> NDArray[np.uint8] | None:
+def read_image(image_path: str) -> NDArray[np.uint8]:
     return jpeg.JPEG(image_path).decode()

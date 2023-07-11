@@ -71,3 +71,7 @@ force-sort-within-sections = true
 
 [tool.ruff.pylint]
 max-args = 7
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
