@@ -35,7 +35,7 @@ jobs:
       run: |
         ruff check .
     - name: Check typehinting with mypy
-        run: |
+      run: |
           mypy -p source
     - name: Test with pytest
       run: |
