@@ -65,7 +65,7 @@ def build_dataloaders(config: addict.Dict) -> dict[str, DataLoader]:
     augs = get_albumentation_augs(config)
     dataloaders = {}
     for subset_name in augs:
-        dataset = ImageNetDataset(config, mode=subset_name, transforms=augs[subset_name])
+        dataset = ImageNetDataset(config, mode=DatasetMode(subset_name), transforms=augs[subset_name])
         dataloaders[subset_name] = DataLoader(
             dataset=dataset,
             batch_size=config.training.batch_size,

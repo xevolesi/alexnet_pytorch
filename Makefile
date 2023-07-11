@@ -4,6 +4,7 @@ SHELL := /bin/bash
 PYTHONPATH := ./
 TEST_DIR := tests/
 LINT_DIR := ./
+MYPY_DIR := source
 
 
 format:
@@ -15,5 +16,8 @@ lint:
 run_tests:
 	pytest -svvv ${TEST_DIR}
 
+type_check:
+	mypy -p ${MYPY_DIR}
+
 # Call this before commit.
-pre_push_test: lint run_tests
+pre_push_test: type_check lint run_tests
