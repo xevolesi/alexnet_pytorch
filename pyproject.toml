@@ -1,8 +1,8 @@
 [tool.ruff]
 line-length = 120
 exclude = [".venv", ".pytest_cache", ".ruff_cache", ".git", ".github"]
-select = ["ALL"]
-ignore = [
+lint.select = ["ALL"]
+lint.ignore = [
     "A002",
     "A003",
     "ANN001",
@@ -32,17 +32,22 @@ ignore = [
     "D104",
     "D105",
     "D107",
+    "D203",
+    "D213",
 
     # They won't allow you to use boolean positional arguments.
     "FBT001",
     "FBT002",
+
+    # Don't want to add `from __future__ import annotations`.
+    "FA102",
 ]
 src = ["source"]
 
-[tool.ruff.pep8-naming]
+[tool.ruff.lint.pep8-naming]
 classmethod-decorators = ["classmethod", "pydantic.validator"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["E402"]
 "test_*.py" = [
     "S101",
@@ -65,11 +70,11 @@ classmethod-decorators = ["classmethod", "pydantic.validator"]
     "INP001",
 ]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
 
-[tool.ruff.pylint]
+[tool.ruff.lint.pylint]
 max-args = 7
 
 [tool.mypy]
