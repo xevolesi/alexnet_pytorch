@@ -17,6 +17,8 @@ augmentations:
     transform:
       __class_fullname__: Compose
       transforms:
+        - __class_fullname__: albumentations.SmallestMaxSize
+          max_size: 256
         - __class_fullname__: albumentations.augmentations.crops.transforms.RandomResizedCrop
           height: 224
           width: 224
