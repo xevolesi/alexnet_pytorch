@@ -5,6 +5,9 @@ from torch import nn
 class AlexNet(nn.Module):
     def __init__(self, in_channels: int = 3, n_classes: int = 1000) -> None:
         super().__init__()
+        self.n_classes = n_classes
+        self.in_channels = in_channels
+
         self.block1 = nn.Sequential(
             nn.Conv2d(in_channels, 96, kernel_size=11, stride=4, padding=5),
             nn.LocalResponseNorm(size=5, alpha=10e-4, k=2, beta=0.75),
