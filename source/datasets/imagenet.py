@@ -1,77 +1,77 @@
-import json
-import os
+import multiprocessing as mp
 from pathlib import Path
 import typing as ty
+import warnings
 
-import addict
 import albumentations as album
-import jpeg4py as jpeg
 import numpy as np
 from numpy.typing import NDArray
-from source.utils import get_albumentation_augs
+import psutil
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 
-from .utils import DatasetMode, fix_worker_seeds, read_image
+from .stats import IMAGE_SIZE_IN_BYTES_80_PERCENTILE, get_imagenet_class_id_from_name
+from .utils import read_image
 
+ImageT: ty.TypeAlias = NDArray[np.uint8] | torch.Tensor
 
 class DataPoint(ty.TypedDict):
-    image: NDArray[np.uint8] | torch.Tensor
+    image: ImageT
     label: int
 
 
 class ImageNetDataset(Dataset):
     def __init__(
-            self, config: addict.Dict, mode: DatasetMode = DatasetMode.TRAIN, transforms: album.Compose | None = None
+        self,
+        root_dir: str,
+        subset: ty.Literal["train", "val"],
+        num_cached_images: int = 0,
+        transforms: album.Compose | None = None,
     ) -> None:
         super().__init__()
-        self.mode = mode
-        self.root_dir = Path(config.path.dataset.root_dir) / f"{self.mode}"
-        with Path(config.path.dataset.meta_file_path).open() as jfs:
-            self.class_mapper = json.load(jfs)
-        self.classname2index = {classname: index for index, classname in enumerate(self.class_mapper.keys())}
-        self.index2classname = {index: classname for classname, index in self.classname2index.items()}
-        self.image_names = os.listdir(self.root_dir)
+        self.subset = subset
+        self.root_dir = root_dir
         self.transforms = transforms
 
+        subset_folder_path = Path(self.root_dir) / f"{self.subset}_images"
+        image_paths = [path for path in subset_folder_path.iterdir() if path.name.endswith(".JPEG")]
+
+        # Get labels. Let's store it as NumPy array to avoid issues
+        # with DataLoader multiprocessing.
+        self.image_labels = np.array([get_imagenet_class_id_from_name(path.name) for path in image_paths])
+
+        # Get images.
+        availalbe_ram = round(0.9 * psutil.virtual_memory().available)
+        num_images_avail = round(availalbe_ram / IMAGE_SIZE_IN_BYTES_80_PERCENTILE)
+
+        # Let's check if all images fit in RAM. If no - turn of
+        # caching completely.
+        self.num_cached_images = min(len(self.image_labels), num_cached_images)
+        if self.num_cached_images > num_images_avail:
+            message = (
+                f"You requested to cache {self.num_cached_images} but there is no enough RAM for it. "
+                "So no images will be cached."
+            )
+            warnings.warn(message, category=UserWarning, stacklevel=2)
+            self.num_cached_images = 0
+
+        self.images_in_ram_indices = set(range(self.num_cached_images))
+        to_load_into_ram = image_paths[:self.num_cached_images]
+        to_stay_as_paths = image_paths[self.num_cached_images:]
+
+        with mp.Pool(mp.cpu_count() - 2) as pool:
+            self.image_collection = pool.map(read_image, to_load_into_ram)
+        self.image_collection.extend(to_stay_as_paths)
+
     def __len__(self) -> int:
-        return len(self.image_names)
+        return len(self.image_collection)
 
     def __getitem__(self, index: int) -> DataPoint:
-        try:
-            image_name = self.image_names[index]
-            image = self._get_image(index)
-        except jpeg.JPEGRuntimeError:
-            image_name = self.image_names[index]
-            image = self._get_image(index - 1)
+        image = self.image_collection[index]
+        if index not in self.images_in_ram_indices:
+            image = read_image(self.image_collection[index])
+        label = self.image_labels[index]
+
         if self.transforms is not None:
             image = self.transforms(image=image)["image"]
-        label = self.get_classidx_from_classname(self.get_classname_from_filename(image_name))
         return {"image": image, "label": label}
-
-    def _get_image(self, index: int) -> NDArray[np.uint8]:
-        image_name = self.image_names[index]
-        image_path = self.root_dir / image_name
-        return read_image(image_path.as_posix())
-
-    def get_classname_from_filename(self, filename: str) -> str:
-        return filename.split("_")[-1].split(".")[0]
-
-    def get_classidx_from_classname(self, classname: str) -> int:
-        return self.classname2index[classname]
-
-
-def build_dataloaders(config: addict.Dict) -> dict[str, DataLoader]:
-    augs = get_albumentation_augs(config)
-    dataloaders = {}
-    for subset_name in augs:
-        dataset = ImageNetDataset(config, mode=DatasetMode(subset_name), transforms=augs[subset_name])
-        dataloaders[subset_name] = DataLoader(
-            dataset=dataset,
-            batch_size=config.training.batch_size,
-            shuffle=subset_name == "train",
-            pin_memory=torch.cuda.is_available(),
-            num_workers=config.training.dataloader_num_workers,
-            worker_init_fn=fix_worker_seeds
-        )
-    return dataloaders

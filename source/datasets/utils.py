@@ -1,23 +1,13 @@
-from enum import Enum
-
+import cv2
 import jpeg4py as jpeg
 import numpy as np
 from numpy.typing import NDArray
-from source.utils.general import reseed
-
-
-class DatasetMode(str, Enum):
-    __slots__ = ()
-    TRAIN = "train"
-    VAL = "val"
-    TEST = "test"
-
-
-def fix_worker_seeds(worker_id: int) -> None:
-    """Fix seeds inside single worker."""
-    seed = np.random.default_rng().bit_generator.state["state"]["state"] + worker_id
-    reseed(seed)
 
 
 def read_image(image_path: str) -> NDArray[np.uint8]:
-    return jpeg.JPEG(image_path).decode()
+    try:
+        image = jpeg.JPEG(image_path).decode()
+    except jpeg.JPEGRuntimeError:
+        image = cv2.imread(image_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    return image
