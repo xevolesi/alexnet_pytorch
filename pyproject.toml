@@ -1,6 +1,6 @@
 [tool.ruff]
 line-length = 120
-exclude = [".venv", ".pytest_cache", ".ruff_cache", ".git", ".github"]
+exclude = [".venv", ".pytest_cache", ".ruff_cache", ".git", ".github", "*.ipynb"]
 lint.select = ["ALL"]
 lint.ignore = [
     "A002",
