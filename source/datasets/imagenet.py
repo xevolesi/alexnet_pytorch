@@ -34,12 +34,10 @@ class ImageNetDataset(Dataset):
         subset_folder_path = os.path.join(self.root_dir, f"{self.subset}_images")
         image_paths = [file.path for file in os.scandir(subset_folder_path) if file.name.endswith(".JPEG")]
 
-        # Get labels. Let's store it as NumPy array to avoid issues
+        # Get images and labels. Let's store them as NumPy array to avoid issues
         # with DataLoader multiprocessing.
-        self.image_labels = np.array([get_imagenet_class_id_from_name(os.path.split(path)[-1]) for path in image_paths])
-
-        # Get images.
         self.image_collection = np.array(image_paths)
+        self.image_labels = np.array([get_imagenet_class_id_from_name(os.path.split(path)[-1]) for path in image_paths])
 
     def __len__(self) -> int:
         return len(self.image_labels)
@@ -57,16 +55,17 @@ def build_dataloaders(config: addict.Dict) -> dict[str, DataLoader[ImageNetDatas
     dataloaders = {}
     transforms = get_albumentation_augs(config)
     for subset, subset_transforms in transforms.items():
-        dataset = ImageNetDataset(
-            config.path.dataset_root_dir,
-            subset=subset,
-            transforms=subset_transforms,
-        )
+        dataset = ImageNetDataset(config.path.dataset_root_dir, subset=subset, transforms=subset_transforms)
         dataloaders[subset] = DataLoader(
             dataset,
             batch_size=config.training.batch_size,
             shuffle=subset == "train",
-            pin_memory=True,
+
+            # I used pin memory because it speed up my training loop.
+            # But there is no guarantee that it will help you in your
+            # training since there is a lot of myths about pinning
+            # memory in PyTorch.
+            pin_memory=config.training.pin_memory,
             num_workers=config.training.dataloader_num_workers,
         )
     return dataloaders
