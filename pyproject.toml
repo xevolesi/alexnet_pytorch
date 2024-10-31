@@ -34,6 +34,9 @@ lint.ignore = [
     "D107",
     "D203",
     "D213",
+    "D205",
+    "D400",
+    "D415",
 
     # They won't allow you to use boolean positional arguments.
     "FBT001",
@@ -41,6 +44,14 @@ lint.ignore = [
 
     # Don't want to add `from __future__ import annotations`.
     "FA102",
+
+    # I love os.path.
+    "PTH118",
+    "PTH123",
+    "PTH103",
+
+    # Some NumPy stuff i don't like.
+    "NPY002",
 ]
 src = ["source"]
 
@@ -77,6 +88,9 @@ force-sort-within-sections = true
 [tool.ruff.lint.pylint]
 max-args = 7
 
+[tool.ruff.lint.mccabe]
+max-complexity = 20
+
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 ignore_missing_imports = true
