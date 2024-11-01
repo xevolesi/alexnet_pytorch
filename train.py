@@ -1,12 +1,12 @@
 import argparse as ap
 from collections import defaultdict
 import os
+import time
 
 from coolname import generate_slug
 from loguru import logger
 from source.datasets import ImageNetDataset, build_dataloaders
 from source.metrics import calculate_batch_top_k_error_rate
-from source.models import PAPER_ERROR_RATE_AT_1, PAPER_ERROR_RATE_AT_5
 from source.utils.general import (
     get_cpu_state_dict,
     get_object_from_dict,
@@ -14,10 +14,18 @@ from source.utils.general import (
     seed_everything,
     tensor_dict_to_float_dict,
 )
+from source.utils.tb_logger import TensorBoardLogger
 import torch
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms.functional import ten_crop
+
+# Some additional settings.
+os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
+os.environ["ALBUMENTATIONS_DISABLE_VERSION_CHECK"] = "1"
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cudnn.deterministic = True
+torch.backends.cuda.matmul.allow_tf32 = True
 
 
 def train_one_epoch(
@@ -91,16 +99,21 @@ def main(args: ap.Namespace) -> None:
     device = torch.device(config.training.device)
     criterion = get_object_from_dict(config.criterion)
     model = get_object_from_dict(config.model).to(device)
-    tb_logger = SummaryWriter(log_dir=os.path.join(config.path.tb_log_dir, run_name))
     optimizer = get_object_from_dict(config.optimizer, params=model.parameters())
     scheduler = get_object_from_dict(config.scheduler, optimizer=optimizer)
+    tb_logger = TensorBoardLogger(
+        log_dir=os.path.join(config.path.tb_log_dir, run_name),
+        init_model=model,
+    )
     logger.info("Initialized training ingredients")
 
     best_model_weights = None
     best_metric = float("inf")
     for epoch in range(config.training.n_epochs):
+        training_start = time.perf_counter()
         training_losses = train_one_epoch(model, dataloaders["train"], optimizer, criterion, device)
         validation_losses, validation_metrics = validate_one_epoch(model, dataloaders["val"], criterion, device, subset="val")
+        training_end = time.perf_counter()
 
         # Authors decreased LR if validation error rate is not
         # improving. They did it manually but i'll hope that
@@ -110,25 +123,30 @@ def main(args: ap.Namespace) -> None:
         scheduler.step(metrics=validation_metrics["val_error_rate@5"])
 
         logger.info(
-            r"[EPOCH {epoch}\{te}]: training_loss: {tl:.5f}, validation_loss: {vl:.5f}",
+            "[EPOCH {epoch}\\{te}]: eta: {eta:.5f} min., training_loss: {tl:.5f}, validation_loss: {vl:.5f}",
             epoch=epoch+1,
             te=config.training.epochs,
+            eta=(training_end - training_start) / 60,
             tl=training_losses["train_loss"],
             vl=validation_losses["val_loss"],
         )
 
         # Log results to TB.
-        # I've just added paper metrics for more informative comparison.
-        # These numbers were taken from page 7, section 6, table 2.
-        paper_metrics = {"paper_error_rate@1": PAPER_ERROR_RATE_AT_1, "paper_error_rate@5": PAPER_ERROR_RATE_AT_5}
-        tb_logger.add_scalars("Metrics", validation_metrics | paper_metrics, epoch)
-        tb_logger.add_scalars("Losses", training_losses | validation_losses, epoch)
+        tb_logger.log(
+            epoch=epoch,
+            metric_dict=validation_metrics,
+            losses_dict=validation_losses | training_losses,
+            optimizer=optimizer,
+            optimizer_param_names=("lr", "weight_decay"),
+            model=model,
+        )
 
         # Save weights every N epochs.
-        if (epoch + 1) % config.training.save_every_epoch == 0:
+        if config.training.save_every_epoch is not None and (epoch + 1) % config.training.save_every_epoch == 0:
             save_name = f"alexnet_{epoch}_{round(validation_metrics['val_error_rate@5'], 4)}.pt"
             save_path = os.path.join(weights_path, save_name)
             torch.save(get_cpu_state_dict(model), save_path)
+            logger.info("Saved epoch {epoch} weights to {wp}", epoch=epoch+1, wp=save_path)
 
         # Determine best model.
         # < since we are looking for error rate, not accuracy.
@@ -141,6 +159,7 @@ def main(args: ap.Namespace) -> None:
         save_name = f"alexnet_best_{epoch}_{round(best_metric, 4)}.pt"
         best_model_path = os.path.join(weights_path, save_name)
         torch.save(best_model_weights, best_model_path)
+        logger.info("Saved best weights to {sp}", sp=best_model_path)
 
 
 if __name__ == "__main__":
