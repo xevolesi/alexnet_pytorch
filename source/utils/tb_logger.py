@@ -75,6 +75,11 @@ class TensorBoardLogger:
                 scalars[tag] = param_group[param_name]
         self.summary_writer.add_scalars("Optimizer", scalars, global_step=epoch)
 
+    def log_gradient_hist(self, grad_dict: dict[str, torch.Tensor], epoch: int) -> None:
+        for param_name, param_grad in grad_dict.items():
+            tag = f"Gradients/{param_name}"
+            self.summary_writer.add_histogram(tag, param_grad, epoch)
+
     def log_metrics(self, metric_dict: dict[str, float], epoch: int) -> None:
         paper_metrics = {"paper_error_rate@1": PAPER_ERROR_RATE_AT_1, "paper_error_rate@5": PAPER_ERROR_RATE_AT_5}
         self.summary_writer.add_scalars("Metrics", metric_dict | paper_metrics, epoch)
@@ -87,12 +92,16 @@ class TensorBoardLogger:
         epoch: int,
         metric_dict: dict[str, float],
         losses_dict: dict[str, float],
+        grad_dict: dict[str, torch.Tensor] | None = None,
         optimizer: torch.optim.Optimizer | None = None,
         optimizer_param_names: tuple[str, ...] | None = None,
         model: torch.nn.Module | None = None,
     ) -> None:
         self.log_metrics(metric_dict, epoch)
         self.log_losses(losses_dict, epoch)
+
+        if grad_dict is not None:
+            self.log_gradient_hist(grad_dict, epoch)
 
         if optimizer is not None:
             if optimizer_param_names is None:
