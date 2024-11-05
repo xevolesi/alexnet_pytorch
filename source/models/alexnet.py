@@ -60,7 +60,8 @@ class AlexNet(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-        self.do_paper_init()
+        # It's not working with such initialization.
+        # self.do_paper_init()  # noqa: ERA001
 
     def forward(self, tensor: torch.Tensor) -> torch.Tensor:
         tensor = self.block1(tensor)
