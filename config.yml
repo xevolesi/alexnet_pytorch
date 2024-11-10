@@ -1,6 +1,6 @@
 path:
   run_name: 
-  dataset_root_dir: D:\\datasets\\imagenet
+  dataset_root_dir: D:\\datasets\\imagenet_processed_256
   tb_log_dir: runs
   checkpoint_save_path: weights
 
@@ -46,12 +46,16 @@ augmentations:
         # Given a rectangular image, we first rescaled the image such
         # that the shorter side was of length 256, and then cropped
         # out the central 256×256 patch from the resulting image.
-        - __class_fullname__: albumentations.SmallestMaxSize
-          max_size: 256
-        - __class_fullname__: albumentations.CenterCrop
-          height: 256
-          width: 256
-          p: 1.0
+
+        # NOTE: Resizing-like transformations turned off since i
+        # used `preprocess_imagenet.py` script that do it offline.
+
+        # - __class_fullname__: albumentations.SmallestMaxSize
+        #   max_size: 256
+        # - __class_fullname__: albumentations.CenterCrop
+        #   height: 256
+        #   width: 256
+        #   p: 1.0
         
         # Page 5. Section 4.1.
         # The first form of data augmentation consists of generating
@@ -102,12 +106,16 @@ augmentations:
         # So, they used the same preprocessing for the validation
         # images, but after they used so-called ten-crop transform.
         # NOTE: THIS 10-crop transform is used inside training loop.
-        - __class_fullname__: albumentations.SmallestMaxSize
-          max_size: 256
-        - __class_fullname__: albumentations.CenterCrop
-          height: 256
-          width: 256
-          p: 1.0
+
+        # NOTE: Resizing-like transformations turned off since i
+        # used `preprocess_imagenet.py` script that do it offline.
+
+        # - __class_fullname__: albumentations.SmallestMaxSize
+        #   max_size: 256
+        # - __class_fullname__: albumentations.CenterCrop
+        #   height: 256
+        #   width: 256
+        #   p: 1.0
 
         # Page 2. Section 2.
         # "We did not pre-process the images in any other way, except
