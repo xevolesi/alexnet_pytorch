@@ -37,6 +37,7 @@ lint.ignore = [
     "D205",
     "D400",
     "D415",
+    "D404",
 
     # They won't allow you to use boolean positional arguments.
     "FBT001",
