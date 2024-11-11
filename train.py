@@ -128,10 +128,11 @@ def main(args: ap.Namespace) -> None:
     best_model_weights = None
     best_metric = float("inf")
     for epoch in range(start_epoch, config.training.n_epochs):
-        training_start = time.perf_counter()
+        epoch_start = time.perf_counter()
         training_losses, gradient_dict = train_one_epoch(model, dataloaders["train"], optimizer, criterion, device)
-        validation_losses, validation_metrics = validate_one_epoch(model, dataloaders["val"], criterion, device, subset="val")
         training_end = time.perf_counter()
+        validation_losses, validation_metrics = validate_one_epoch(model, dataloaders["val"], criterion, device, subset="val")
+        validation_end = time.perf_counter()
 
         # Authors decreased LR if validation error rate is not
         # improving. They did it manually but i'll hope that
@@ -139,15 +140,6 @@ def main(args: ap.Namespace) -> None:
         # Didn't get which one of validation error rate is it.
         # Was it top-1 error rate or top-5 error rate?
         scheduler.step(metrics=validation_metrics["val_error_rate@5"])
-
-        logger.info(
-            r"[EPOCH {epoch}/{te}]: eta: {eta:.5f} min., training_loss: {tl:.5f}, validation_loss: {vl:.5f}",
-            epoch=epoch+1,
-            te=config.training.epochs,
-            eta=(training_end - training_start) / 60,
-            tl=training_losses["train_loss"],
-            vl=validation_losses["val_loss"],
-        )
 
         # Log results to TB.
         tb_logger.log(
@@ -173,6 +165,23 @@ def main(args: ap.Namespace) -> None:
             save_path = os.path.join(weights_path, save_name)
             torch.save(full_checkpoint, save_path)
             logger.info("Saved epoch {epoch} weights to {wp}", epoch=epoch+1, wp=save_path)
+
+        training_time = training_end - epoch_start
+        validation_time = validation_end - training_end
+        logger.info(
+            (
+                "[EPOCH {epoch}]: tloss: {tl:.5f}, vloss: {vl:.5f}, "
+                "train time: {tts:.2f} sec. ({ttm:.2f} min), "
+                "val time: {vts:.2f} sec. ({vtm:.2f} min)"
+            ),
+            epoch=epoch+1,
+            tl=training_losses["train_loss"],
+            vl=validation_losses["val_loss"],
+            tts=training_time,
+            ttm=training_time / 60,
+            vts=validation_time,
+            vtm=validation_time / 60,
+        )
 
         # Determine best model.
         # < since we are looking for error rate, not accuracy.
