@@ -75,11 +75,3 @@ def tensor_dict_to_float_dict(tensor_dict: dict[str, torch.Tensor], scale: float
 
 def get_cpu_state_dict(model: torch.nn.Module) -> dict[str, torch.FloatTensor]:
     return {name: t.detach().cpu() for name, t in model.state_dict().items()}
-
-
-def get_grad_dict(model: torch.nn.Module) -> dict[str, torch.Tensor]:
-    try:
-        grad_dict = {name: param.grad.data.detach().cpu() for name, param in model.named_parameters()}
-    except AttributeError:
-        grad_dict = {name: torch.zeros_like(param, device="cpu") for name, param in model.named_parameters()}
-    return grad_dict

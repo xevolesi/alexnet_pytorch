@@ -9,7 +9,6 @@ from source.datasets import ImageNetDataset, build_dataloaders
 from source.metrics import calculate_batch_top_k_error_rate
 from source.utils.general import (
     get_cpu_state_dict,
-    get_grad_dict,
     get_object_from_dict,
     read_config,
     seed_everything,
@@ -37,8 +36,8 @@ def train_one_epoch(
     device: torch.device,
 ) -> tuple[dict[str, float], dict[str, torch.Tensor]]:
     model.train()
-    grad_dict = get_grad_dict(model)
     running_losses = defaultdict(lambda: torch.as_tensor(0.0, device=device))
+    grad_dict = {name: torch.zeros_like(param, device=device) for name, param in model.named_parameters()}
     for batch in dataloader:
         images = batch["image"].to(device, non_blocking=True)
         labels = batch["label"].to(device, non_blocking=True)
@@ -48,7 +47,7 @@ def train_one_epoch(
         optimizer.step()
 
         # Track avg. of the gradients.
-        for param_name, param_grad in get_grad_dict(model).items():
+        for param_name, param_grad in model.named_parameters():
             grad_dict[param_name] += param_grad
 
         optimizer.zero_grad(set_to_none=True)
@@ -106,16 +105,19 @@ def main(args: ap.Namespace) -> None:
     )
 
     device = torch.device(config.training.device)
-    criterion = get_object_from_dict(config.criterion)
-    model = get_object_from_dict(config.model).to(device)
-    optimizer = get_object_from_dict(config.optimizer, params=model.parameters())
-    scheduler = get_object_from_dict(config.scheduler, optimizer=optimizer)
+    criterion: torch.nn.modules.loss._Loss = get_object_from_dict(config.criterion)
+    model: torch.nn.Module = get_object_from_dict(config.model).to(device)
+    optimizer: torch.optim.Optimizer = get_object_from_dict(config.optimizer, params=model.parameters())
+    scheduler: torch.optim.lr_scheduler.LRScheduler = get_object_from_dict(config.scheduler, optimizer=optimizer)
 
-    if config.training.start_from_this_ckpt:
-        full_checkpoint = torch.load(config.training.start_from_this_ckpt)
+    start_epoch = 0
+    if config.training.start_from_this_ckpt is not None:
+        full_checkpoint = torch.load(config.training.start_from_this_ckpt, weights_only=True)
+        start_epoch = 16
         model.load_state_dict(full_checkpoint["model"])
         optimizer.load_state_dict(full_checkpoint["optimizer"])
         scheduler.load_state_dict(full_checkpoint["scheduler"])
+        logger.info("Loading checkpoint from {sp}", sp=config.training.start_from_this_ckpt)
 
     tb_logger = TensorBoardLogger(
         log_dir=os.path.join(config.path.tb_log_dir, run_name),
@@ -125,7 +127,7 @@ def main(args: ap.Namespace) -> None:
 
     best_model_weights = None
     best_metric = float("inf")
-    for epoch in range(config.training.n_epochs):
+    for epoch in range(start_epoch, config.training.n_epochs):
         training_start = time.perf_counter()
         training_losses, gradient_dict = train_one_epoch(model, dataloaders["train"], optimizer, criterion, device)
         validation_losses, validation_metrics = validate_one_epoch(model, dataloaders["val"], criterion, device, subset="val")
@@ -139,7 +141,7 @@ def main(args: ap.Namespace) -> None:
         scheduler.step(metrics=validation_metrics["val_error_rate@5"])
 
         logger.info(
-            "[EPOCH {epoch}\\{te}]: eta: {eta:.5f} min., training_loss: {tl:.5f}, validation_loss: {vl:.5f}",
+            r"[EPOCH {epoch}/{te}]: eta: {eta:.5f} min., training_loss: {tl:.5f}, validation_loss: {vl:.5f}",
             epoch=epoch+1,
             te=config.training.epochs,
             eta=(training_end - training_start) / 60,
@@ -161,9 +163,12 @@ def main(args: ap.Namespace) -> None:
         # Save weights every N epochs.
         if config.training.save_every_epoch is not None and (epoch + 1) % config.training.save_every_epoch == 0:
             model_weights = get_cpu_state_dict(model)
-            optimizer_weights = get_cpu_state_dict(optimizer)
-            shceduler_weights = get_cpu_state_dict(scheduler)
-            full_checkpoint = {"model": model_weights, "optimizer": optimizer_weights, "scheduler": shceduler_weights}
+            full_checkpoint = {
+                "epoch": epoch,
+                "model": model_weights,
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+            }
             save_name = f"alexnet_{epoch}_{round(validation_metrics['val_error_rate@5'], 4)}_full.pt"
             save_path = os.path.join(weights_path, save_name)
             torch.save(full_checkpoint, save_path)
