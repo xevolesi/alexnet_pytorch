@@ -1,5 +1,4 @@
 path:
-  run_name: 
   dataset_root_dir: D:\\datasets\\imagenet_processed_256
   tb_log_dir: runs
   checkpoint_save_path: weights
@@ -12,7 +11,7 @@ model:
 training:
   start_from_this_ckpt: null
   seed: 2024
-  n_epochs: 120
+  n_epochs: 10
   save_every_epoch: 1
   device: cuda:0
   batch_size: 128
