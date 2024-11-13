@@ -8,6 +8,7 @@ from loguru import logger
 from source.datasets import ImageNetDataset, build_dataloaders
 from source.metrics import calculate_batch_top_k_error_rate
 from source.utils.general import (
+    cuda_dict_to_cpu_dict,
     get_cpu_state_dict,
     get_object_from_dict,
     read_config,
@@ -53,8 +54,10 @@ def train_one_epoch(
         optimizer.zero_grad(set_to_none=True)
         running_losses["train_loss"] += loss
 
-    grad_dict = {name: grad * 1/len(dataloader) for name, grad in grad_dict.items()}
-    return tensor_dict_to_float_dict(running_losses, 1/len(dataloader)), grad_dict
+    scale_factor = 1/len(dataloader)
+    running_losses = tensor_dict_to_float_dict(running_losses, scale_factor)
+    grad_dict = cuda_dict_to_cpu_dict(grad_dict, scale_factor)
+    return running_losses, grad_dict
 
 
 @torch.no_grad()
@@ -127,6 +130,7 @@ def main(args: ap.Namespace) -> None:
 
     best_model_weights = None
     best_metric = float("inf")
+    total_train_start = time.perf_counter()
     for epoch in range(start_epoch, config.training.n_epochs):
         epoch_start = time.perf_counter()
         training_losses, gradient_dict = train_one_epoch(model, dataloaders["train"], optimizer, criterion, device)
@@ -188,6 +192,12 @@ def main(args: ap.Namespace) -> None:
         if validation_metrics["val_error_rate@5"] < best_metric:
             best_metric = validation_metrics["val_error_rate@5"]
             best_model_weights = get_cpu_state_dict(model)
+    total_training_time_sec = time.perf_counter() - total_train_start
+    logger.info(
+        "Total training time is {ttime_sec:.2f} sec. ({ttime_min:.2f} min.)",
+        ttime_sec=total_training_time_sec,
+        ttime_min=total_training_time_sec / 60,
+    )
 
     # Save best model if any.
     if best_model_weights is not None:

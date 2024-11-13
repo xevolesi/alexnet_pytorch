@@ -73,5 +73,9 @@ def tensor_dict_to_float_dict(tensor_dict: dict[str, torch.Tensor], scale: float
     return {name: t.detach().cpu().item() * scale for name, t in tensor_dict.items()}
 
 
+def cuda_dict_to_cpu_dict(cuda_dict: dict[str, torch.Tensor], scale: float = 1.0) -> dict[str, torch.Tensor]:
+    return {name: t.detach().cpu() * scale for name, t in cuda_dict.items()}
+
+
 def get_cpu_state_dict(model: torch.nn.Module) -> dict[str, torch.FloatTensor]:
     return {name: t.detach().cpu() for name, t in model.state_dict().items()}
