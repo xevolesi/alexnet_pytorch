@@ -101,35 +101,37 @@ def main(args: ap.Namespace) -> None:
     logger.info("Run name: {rn}", rn=run_name)
     logger.info("Created weights path: {wp}", wp=weights_path)
 
+    # Training and validation data.
     dataloaders = build_dataloaders(config)
     logger.info(
         "Created dataloaders: {dls}",
         dls={subset: (len(dataloader.dataset), len(dataloader)) for subset, dataloader in dataloaders.items()}
     )
 
+    # Main ingredients.
     device = torch.device(config.training.device)
-    criterion: torch.nn.modules.loss._Loss = get_object_from_dict(config.criterion)
     model: torch.nn.Module = get_object_from_dict(config.model).to(device)
+    criterion: torch.nn.modules.loss._Loss = get_object_from_dict(config.criterion)
     optimizer: torch.optim.Optimizer = get_object_from_dict(config.optimizer, params=model.parameters())
     scheduler: torch.optim.lr_scheduler.LRScheduler = get_object_from_dict(config.scheduler, optimizer=optimizer)
 
+    # Try to load checkpoint to resume training.
     start_epoch = 0
     if config.training.start_from_this_ckpt is not None:
         full_checkpoint = torch.load(config.training.start_from_this_ckpt, weights_only=True)
-        start_epoch = 16
+        start_epoch = full_checkpoint["epoch"]
         model.load_state_dict(full_checkpoint["model"])
         optimizer.load_state_dict(full_checkpoint["optimizer"])
         scheduler.load_state_dict(full_checkpoint["scheduler"])
         logger.info("Loading checkpoint from {sp}", sp=config.training.start_from_this_ckpt)
 
-    tb_logger = TensorBoardLogger(
-        log_dir=os.path.join(config.path.tb_log_dir, run_name),
-        init_model=model,
-    )
+    # Logging to TB.
+    tb_logger = TensorBoardLogger(os.path.join(config.path.tb_log_dir, run_name), model)
     logger.info("Initialized training ingredients")
 
     best_model_weights = None
     best_metric = float("inf")
+    logger.info("Starting training")
     total_train_start = time.perf_counter()
     for epoch in range(start_epoch, config.training.n_epochs):
         epoch_start = time.perf_counter()
@@ -170,6 +172,7 @@ def main(args: ap.Namespace) -> None:
             torch.save(full_checkpoint, save_path)
             logger.info("Saved epoch {epoch} weights to {wp}", epoch=epoch+1, wp=save_path)
 
+        # Console logging.
         training_time = training_end - epoch_start
         validation_time = validation_end - training_end
         logger.info(
@@ -192,6 +195,7 @@ def main(args: ap.Namespace) -> None:
         if validation_metrics["val_error_rate@5"] < best_metric:
             best_metric = validation_metrics["val_error_rate@5"]
             best_model_weights = get_cpu_state_dict(model)
+
     total_training_time_sec = time.perf_counter() - total_train_start
     logger.info(
         "Total training time is {ttime_sec:.2f} sec. ({ttime_min:.2f} min.)",
