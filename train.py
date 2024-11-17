@@ -95,18 +95,15 @@ def main(args: ap.Namespace) -> None:
     seed_everything(config)
 
     # Dir for weights.
-    run_name = generate_slug(2)
+    run_name = config.path.run_name or generate_slug(2)
     weights_path = os.path.join(config.path.checkpoint_save_path, run_name)
     os.makedirs(weights_path, exist_ok=True)
-    logger.info("Run name: {rn}", rn=run_name)
-    logger.info("Created weights path: {wp}", wp=weights_path)
+    logger.info("Run name: {rn}, path to model weights folder: '{mwf}'", rn=run_name, mwf=weights_path)
 
     # Training and validation data.
     dataloaders = build_dataloaders(config)
-    logger.info(
-        "Created dataloaders: {dls}",
-        dls={subset: (len(dataloader.dataset), len(dataloader)) for subset, dataloader in dataloaders.items()}
-    )
+    message = "; ".join((f"{subset}: n_samples {len(dataloader.dataset)}, n_batches {len(dataloader)}" for subset, dataloader in dataloaders.items()))
+    logger.info(f"Created dataloaders: {message}")
 
     # Main ingredients.
     device = torch.device(config.training.device)
@@ -119,18 +116,33 @@ def main(args: ap.Namespace) -> None:
     start_epoch = 0
     if config.training.start_from_this_ckpt is not None:
         full_checkpoint = torch.load(config.training.start_from_this_ckpt, weights_only=True)
-        start_epoch = full_checkpoint["epoch"]
+        start_epoch = full_checkpoint["epoch"] + 1
         model.load_state_dict(full_checkpoint["model"])
         optimizer.load_state_dict(full_checkpoint["optimizer"])
         scheduler.load_state_dict(full_checkpoint["scheduler"])
-        logger.info("Loading checkpoint from {sp}", sp=config.training.start_from_this_ckpt)
+        logger.info(
+            "Resume training from {se} with loaded checkpoint from {sp}",
+            se=start_epoch,
+            sp=config.training.start_from_this_ckpt,
+        )
 
     # Logging to TB.
     tb_logger = TensorBoardLogger(os.path.join(config.path.tb_log_dir, run_name), model)
     logger.info("Initialized training ingredients")
 
-    best_model_weights = None
-    best_metric = float("inf")
+    # Evaluate created model. It's always interesting what score
+    # random model may achieve in case it random, of course.
+    best_model_weights = get_cpu_state_dict(model)
+    validation_losses, validation_metrics = validate_one_epoch(model, dataloaders["val"], criterion, device, subset="val")
+    best_metric = validation_metrics["val_error_rate@5"]
+    logger.info(
+        "Model before training achieves {vl:.5f} val loss and {ver:.5f} val error rate @ 5",
+        vl=validation_losses["val_loss"],
+        ver=validation_metrics["val_error_rate@5"],
+    )
+    tb_logger.log(start_epoch - 1, validation_metrics, validation_losses, None, None, None, model)
+
+    # Start training.
     logger.info("Starting training")
     total_train_start = time.perf_counter()
     for epoch in range(start_epoch, config.training.n_epochs):
@@ -203,12 +215,13 @@ def main(args: ap.Namespace) -> None:
         ttime_min=total_training_time_sec / 60,
     )
 
-    # Save best model if any.
-    if best_model_weights is not None:
-        save_name = f"alexnet_best_{epoch}_{round(best_metric, 4)}.pt"
-        best_model_path = os.path.join(weights_path, save_name)
-        torch.save(best_model_weights, best_model_path)
-        logger.info("Saved best weights to {sp}", sp=best_model_path)
+    # Save best model.
+    save_name = f"alexnet_best_{epoch}_{round(best_metric, 4)}.pt"
+    best_model_path = os.path.join(weights_path, save_name)
+    torch.save(best_model_weights, best_model_path)
+    logger.info("Saved best weights to {sp}", sp=best_model_path)
+
+    tb_logger.close()
 
 
 if __name__ == "__main__":

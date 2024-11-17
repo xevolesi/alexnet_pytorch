@@ -112,3 +112,6 @@ class TensorBoardLogger:
         if model is not None:
             self.log_model_weights_hist(model, epoch)
             self.log_weights_diff_on_epoch(model, epoch)
+
+    def close(self) -> None:
+        self.summary_writer.close()
