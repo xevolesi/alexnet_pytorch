@@ -1,7 +1,9 @@
 --extra-index-url https://download.pytorch.org/whl/cu124
-torch
-torchvision
+torch==2.5.0+cu124
+torchvision==0.20.0+cu124
 addict==2.4.0
 jpeg4py==0.1.4
 albumentations==1.4.20
 coolname==2.2.0
+loguru==0.7.2
+tensorboard==2.18.0
