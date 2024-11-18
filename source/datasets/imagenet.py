@@ -1,77 +1,71 @@
-import json
 import os
-from pathlib import Path
 import typing as ty
 
 import addict
 import albumentations as album
-import jpeg4py as jpeg
 import numpy as np
 from numpy.typing import NDArray
-from source.utils import get_albumentation_augs
+from source.utils.augmentation import get_albumentation_augs
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from .utils import DatasetMode, fix_worker_seeds, read_image
+from .stats import get_imagenet_class_id_from_name
+from .utils import read_image
 
+ImageT: ty.TypeAlias = NDArray[np.uint8] | torch.Tensor
 
 class DataPoint(ty.TypedDict):
-    image: NDArray[np.uint8] | torch.Tensor
+    image: ImageT
     label: int
 
 
 class ImageNetDataset(Dataset):
     def __init__(
-            self, config: addict.Dict, mode: DatasetMode = DatasetMode.TRAIN, transforms: album.Compose | None = None
+        self,
+        root_dir: str,
+        subset: ty.Literal["train", "val"],
+        transforms: album.Compose | None = None,
     ) -> None:
         super().__init__()
-        self.mode = mode
-        self.root_dir = Path(config.path.dataset.root_dir) / f"{self.mode}"
-        with Path(config.path.dataset.meta_file_path).open() as jfs:
-            self.class_mapper = json.load(jfs)
-        self.classname2index = {classname: index for index, classname in enumerate(self.class_mapper.keys())}
-        self.index2classname = {index: classname for classname, index in self.classname2index.items()}
-        self.image_names = os.listdir(self.root_dir)
+        self.subset = subset
+        self.root_dir = root_dir
         self.transforms = transforms
 
+        subset_folder_path = os.path.join(self.root_dir, f"{self.subset}_images")
+        image_paths = [file.path for file in os.scandir(subset_folder_path) if file.name.endswith(".JPEG")]
+
+        # Get images and labels. Let's store them as NumPy array to avoid issues
+        # with DataLoader multiprocessing.
+        self.image_collection = np.array(image_paths)
+        self.image_labels = np.array([get_imagenet_class_id_from_name(os.path.split(path)[-1]) for path in image_paths])
+
     def __len__(self) -> int:
-        return len(self.image_names)
+        return len(self.image_labels)
 
     def __getitem__(self, index: int) -> DataPoint:
-        try:
-            image_name = self.image_names[index]
-            image = self._get_image(index)
-        except jpeg.JPEGRuntimeError:
-            image_name = self.image_names[index]
-            image = self._get_image(index - 1)
+        image = read_image(self.image_collection[index])
+        label = self.image_labels[index]
+
         if self.transforms is not None:
             image = self.transforms(image=image)["image"]
-        label = self.get_classidx_from_classname(self.get_classname_from_filename(image_name))
         return {"image": image, "label": label}
 
-    def _get_image(self, index: int) -> NDArray[np.uint8]:
-        image_name = self.image_names[index]
-        image_path = self.root_dir / image_name
-        return read_image(image_path.as_posix())
 
-    def get_classname_from_filename(self, filename: str) -> str:
-        return filename.split("_")[-1].split(".")[0]
-
-    def get_classidx_from_classname(self, classname: str) -> int:
-        return self.classname2index[classname]
-
-
-def build_dataloaders(config: addict.Dict) -> dict[str, DataLoader]:
-    augs = get_albumentation_augs(config)
+def build_dataloaders(config: addict.Dict) -> dict[str, DataLoader[ImageNetDataset]]:
     dataloaders = {}
-    for subset_name in augs:
-        dataset = ImageNetDataset(config, mode=DatasetMode(subset_name), transforms=augs[subset_name])
-        dataloaders[subset_name] = DataLoader(
-            dataset=dataset,
+    transforms = get_albumentation_augs(config)
+    for subset, subset_transforms in transforms.items():
+        dataset = ImageNetDataset(config.path.dataset_root_dir, subset=subset, transforms=subset_transforms)
+        dataloaders[subset] = DataLoader(
+            dataset,
             batch_size=config.training.batch_size,
-            shuffle=subset_name == "train",
-            pin_memory=torch.cuda.is_available(),
+            shuffle=subset == "train",
+
+            # I used pin memory because it speed up my training loop.
+            # But there is no guarantee that it will help you in your
+            # training since there is a lot of myths about pinning
+            # memory in PyTorch.
+            pin_memory=config.training.pin_memory,
             num_workers=config.training.dataloader_num_workers,
-            worker_init_fn=fix_worker_seeds
         )
     return dataloaders

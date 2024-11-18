@@ -70,11 +70,6 @@ augmentations:
         # Page 5. Section 4.1.
         # Specifically, we perform PCA on the set of RGB pixel values
         # throughout the ImageNet training set...
-        # In albumentations FancyPCA uses eigvec and eigvals from the single image
-        # but in paper authors compute them along the whole training dataset.
-        # I found computed vectors and values here: https://github.com/facebookarchive/fb.resnet.torch/blob/985e569d468d23baeef5b952954dcdf3c61c5e73/datasets/imagenet.lua#L71
-        # But i didn't implement FancyPCA as in paper. You can do it by yourself
-        # if you want.
         - __class_fullname__: albumentations.augmentations.transforms.FancyPCA
 
         # Page 2. Section 2.
